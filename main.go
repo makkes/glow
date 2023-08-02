@@ -11,11 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glow/ui"
 	"github.com/charmbracelet/glow/utils"
-	"github.com/meowgorithm/babyenv"
 	gap "github.com/muesli/go-app-paths"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -203,30 +200,9 @@ func execute(cmd *cobra.Command, args []string) error {
 		return executeCLI(cmd, src, os.Stdout)
 	}
 
-	switch len(args) {
-	// TUI running on cwd
-	case 0:
-		return runTUI("", false)
-
-	// TUI with possible dir argument
-	case 1:
-		// Validate that the argument is a directory. If it's not treat it as
-		// an argument to the non-TUI version of Glow (via fallthrough).
-		info, err := os.Stat(args[0])
-		if err == nil && info.IsDir() {
-			p, err := filepath.Abs(args[0])
-			if err == nil {
-				return runTUI(p, false)
-			}
-		}
-		fallthrough
-
-	// CLI
-	default:
-		for _, arg := range args {
-			if err := executeArg(cmd, arg, os.Stdout); err != nil {
-				return err
-			}
+	for _, arg := range args {
+		if err := executeArg(cmd, arg, os.Stdout); err != nil {
+			return err
 		}
 	}
 
@@ -312,43 +288,6 @@ func executeCLI(cmd *cobra.Command, src *source, w io.Writer) error {
 	return nil
 }
 
-func runTUI(workingDirectory string, stashedOnly bool) error {
-	// Read environment to get debugging stuff
-	var cfg ui.Config
-	if err := babyenv.Parse(&cfg); err != nil {
-		return fmt.Errorf("error parsing config: %v", err)
-	}
-
-	// Log to file, if set
-	if cfg.Logfile != "" {
-		f, err := tea.LogToFile(cfg.Logfile, "glow")
-		if err != nil {
-			return err
-		}
-		defer f.Close() //nolint:errcheck
-	}
-
-	cfg.WorkingDirectory = workingDirectory
-	cfg.DocumentTypes = ui.NewDocTypeSet()
-	cfg.ShowAllFiles = showAllFiles
-	cfg.GlamourMaxWidth = width
-	cfg.GlamourStyle = style
-	cfg.EnableMouse = mouse
-
-	if stashedOnly {
-		cfg.DocumentTypes.Add(ui.StashedDoc, ui.NewsDoc)
-	} else if localOnly {
-		cfg.DocumentTypes.Add(ui.LocalDoc)
-	}
-
-	// Run Bubble Tea program
-	if _, err := ui.NewProgram(cfg).Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -386,10 +325,6 @@ func init() {
 	viper.SetDefault("style", "auto")
 	viper.SetDefault("width", 0)
 	viper.SetDefault("local", "false")
-
-	// Stash
-	stashCmd.PersistentFlags().StringVarP(&memo, "memo", "m", "", "memo/note for stashing")
-	rootCmd.AddCommand(stashCmd)
 
 	rootCmd.AddCommand(configCmd)
 }
